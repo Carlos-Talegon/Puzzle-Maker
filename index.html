@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Jigsaw Puzzle - Carlos Talegón Edition</title>
+    <style>
+        :root {
+            --bg-color: #1a202c;
+            --panel-color: #2d3748;
+            --text-color: #f7fafc;
+            --accent-color: #4299e1;
+            --stamp-color: #e53e3e;
+            --save-color: #38a169;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            height: 100%; width: 100%;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        #settings-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .menu-card {
+            background: var(--panel-color);
+            padding: 2rem; border-radius: 12px;
+            text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            width: 450px;
+            margin: 20px;
+        }
+
+        .instructions {
+            text-align: left;
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            color: #cbd5e0;
+        }
+
+        .instructions h3 { margin-top: 0; color: var(--accent-color); }
+        .instructions ul { padding-left: 20px; margin: 5px 0; }
+
+        select, button, input[type="text"], input[type="file"] {
+            padding: 12px; margin: 10px 0; border-radius: 5px; border: none; font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        input[type="text"], input[type="file"] {
+            background: #1a202c;
+            color: white;
+            border: 1px solid #4a5568;
+        }
+
+        button.primary { background: var(--accent-color); color: white; cursor: pointer; font-weight: bold; width: 100%; }
+        button.primary:hover { background: #3182ce; }
+        
+        #save-btn { background: var(--save-color); color: white; cursor: pointer; font-weight: bold; padding: 5px 15px; border-radius: 4px; }
+        #save-btn:hover { background: #2f855a; }
+
+        #load-btn { background: var(--accent-color); color: white; cursor: pointer; font-weight: bold; padding: 5px 15px; border-radius: 4px; }
+        #load-btn:hover { background: #3182ce; }
+
+        label { display: block; text-align: left; margin-top: 10px; font-size: 0.9rem; color: #a0aec0; }
+
+        #game-container {
+            display: none; height: 100vh; width: 100vw;
+        }
+
+        .area {
+            display: flex; flex-direction: column; height: 100%;
+        }
+
+        #area-board {
+            flex: 2; border-right: 2px solid #4a5568;
+            align-items: center; justify-content: center;
+            position: relative;
+        }
+
+        #area-pieces {
+            flex: 1; background: #232936;
+        }
+
+        .header {
+            padding: 10px; background: #4a5568; text-align: center; font-weight: bold;
+            display: flex; justify-content: center; align-items: center; gap: 15px;
+        }
+
+        #puzzle-grid {
+            display: grid; 
+            background: #111; 
+            position: relative;
+            line-height: 0;
+            border: 1px solid #444;
+        }
+
+        .slot {
+            box-sizing: border-box;
+            border: 0.1px solid rgba(255,255,255,0.05);
+            display: block; 
+            overflow: hidden;
+        }
+
+        #pieces-pool {
+            flex: 1; padding: 20px; display: flex; flex-wrap: wrap; 
+            gap: 5px; overflow-y: auto; align-content: flex-start;
+        }
+
+        .piece {
+            cursor: grab; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+            display: block;
+            border: 0.5px solid rgba(255,255,255,0.15);
+        }
+
+        .is-correct {
+            animation: correct-flash 4s ease;
+            cursor: default !important;
+            border: none !important;
+        }
+
+        @keyframes correct-flash {
+            0% { filter: brightness(1); outline: 0px solid white; }
+            50% { filter: brightness(1.8); outline: 4px solid white; }
+            100% { filter: brightness(1); outline: 0px solid white; }
+        }
+
+        #victory-container {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-10deg);
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            pointer-events: none;
+            animation: stamp-fade 0.5s ease-out;
+        }
+
+        @keyframes stamp-fade {
+            from { opacity: 0; transform: translate(-50%, -50%) scale(2) rotate(0deg); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-10deg); }
+        }
+
+        #completion-stamp {
+            border: 8px double var(--stamp-color);
+            border-radius: 50%;
+            color: var(--stamp-color);
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(26, 32, 44, 0.2);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #signature {
+            margin-top: 15px;
+            font-family: 'Segoe UI', sans-serif;
+            font-size: 1.2rem;
+            color: var(--stamp-color);
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.4);
+            padding: 5px 15px;
+            border-radius: 4px;
+        }
+
+        #hud {
+            position: absolute; top: 10px; left: 10px; z-index: 500;
+            display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+            background: rgba(0,0,0,0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+
+        #hud-title { font-size: 1.1rem; font-weight: bold; color: white; white-space: nowrap; }
+
+        #hud-controls { display: flex; gap: 20px; align-items: center; }
+
+        .audio-controls {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            border-left: 1px solid #718096; padding-left: 20px;
+        }
+        
+        .audio-buttons { display: flex; gap: 5px; }
+
+        #mute-btn, #pause-btn, #shuffle-btn, #music-shuffle-btn {
+            background: #4a5568; color: white; border: none; padding: 5px 10px;
+            border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+        }
+        #shuffle-btn, #music-shuffle-btn { background: var(--accent-color); }
+
+        #peek-view {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: black; background-size: contain; 
+            background-repeat: no-repeat; background-position: center; z-index: 2000;
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="bg-music"></audio>
+
+    <div id="settings-overlay">
+        <div class="menu-card">
+            <h1 style="margin: 0; font-size: 2rem;">Puzzle Maker 2026</h1>
+            <h2 style="margin: 0 0 20px 0; font-size: 1.5rem; font-weight: normal; color: var(--text-color);">(by Carlos Talegón)</h2>
+            
+            <div class="instructions">
+                <h3>How to Play</h3>
+                <ul>
+                    <li><b>Image:</b> Select a local file or a web address.</li>
+                    <li><b>Lock:</b> Correct pieces flash and lock permanently.</li>
+                    <li><b>Peek:</b> Hold the <b>'S'</b> key to see the original image.</li>
+                    <li><b>Save:</b> Use 'Save Game' to continue progress later.</li>
+                    <li><b>Load:</b> Use 'Load Game' to restore your last saved game.</li>
+                </ul>
+            </div>
+
+            <div style="text-align: left; margin-bottom: 15px;">
+                <label>Picture to use?</label>
+                <select id="image-source" onchange="toggleImageInputs()" style="width: 100%;">
+                    <option value="web">Use a web picture</option>
+                    <option value="local">Choose picture from folder</option>
+                </select>
+
+                <div id="url-input-container">
+                    <label>Enter Web Address:</label>
+                    <input type="text" id="web-url" value="https://www.londontopsightstours.com/wp-content/uploads/2019/08/1-3-1024x683.jpg" style="width: 100%;">
+                </div>
+
+                <div id="file-input-container" style="display: none;">
+                    <label>Select Image from Folder:</label>
+                    <input type="file" id="local-file" accept="image/*" style="width: 100%;">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left;">
+                <div>
+                    <label>Grid Size:</label>
+                    <select id="grid-select" style="width: 100%;"></select>
+                </div>
+                <div>
+                    <label>Timer:</label>
+                    <select id="timer-select" style="width: 100%;">
+                        <option value="on">On</option>
+                        <option value="off">Off</option>
+                    </select>
+                </div>
+            </div>
+
+            <div style="text-align: left;">
+                <label>Background Music:</label>
+                <select id="music-select" onchange="toggleMusicInputs()" style="width: 100%;">
+                    <option value="on">On</option>
+                    <option value="off" selected>Off</option>
+                </select>
+
+                <div id="music-source-container" style="display:none">
+                    <label>Music Source:</label>
+                    <select id="music-source" onchange="toggleMusicInputs()" style="width: 100%;">
+                        <option value="folder">folder (choose MP3 files from PC)</option>
+                        <option value="link">link (web link ending in .mp3)</option>
+                    </select>
+                </div>
+
+                <div id="music-file-container" style="display: none;">
+                    <label>Select MP3s:</label>
+                    <input type="file" id="local-music" accept="audio/mpeg" multiple style="width: 100%;">
+                </div>
+
+                <div id="music-link-container" style="display: none;">
+                    <label>Enter Web MP3 Link:</label>
+                    <input type="text" id="music-url" placeholder="https://example.com/song.mp3" value="https://ia600705.us.archive.org/14/items/Classical-Bach-1/Bach%2004-%20Adagio%20-%20Oboe%20Concerto%20in%20D%20minor-Kazimierz%20magiczny-.mp3" style="width: 100%;">
+                </div>
+            </div>
+
+            <button class="primary" style="margin-top: 20px;" onclick="handleStart()">START GAME</button>
+        </div>
+    </div>
+
+    <div id="peek-view"></div>
+    
+    <div id="hud" style="display:none">
+        <div id="hud-title">Puzzle Maker 2026 (by Carlos Talegón)</div>
+        <div id="hud-controls">
+        <div id="completion-stats">Completed 0 %</div>
+        
+        <div class="audio-controls" id="audio-ui">
+            <div class="audio-buttons">
+                <button id="mute-btn" onclick="toggleMute()">Mute</button>
+                <button id="pause-btn" onclick="togglePause()">Pause</button>
+                <button id="music-shuffle-btn" onclick="shuffleMusic()" style="display:none">Shuffle</button>
+            </div>
+            <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.5" oninput="updateVolume(this.value)">
+        </div>
+
+        <div id="timer">00:00</div>
+        <button id="save-btn" onclick="saveGame()">Save Game</button>
+        <button id="load-btn" onclick="loadGame()">Load Game</button>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div class="area" id="area-board">
+            <div class="header">Area 1 - Puzzle Board</div>
+            <div id="puzzle-grid"></div>
+            
+            <div id="victory-container">
+                <div id="completion-stamp">PUZZLE<br>COMPLETED!</div>
+                <div id="signature">Game by Carlos Talegón 2026</div>
+            </div>
+        </div>
+        <div class="area" id="area-pieces">
+            <div class="header">
+                Area 2 - Pieces
+                <button id="shuffle-btn" onclick="shuffleRemaining()">Shuffle</button>
+            </div>
+            <div id="pieces-pool" ondrop="dropToPool(event)" ondragover="allowDrop(event)"></div>
+        </div>
+    </div>
+
+    <script>
+        // Populate Grid Select from 3 to 20
+        const gridSelect = document.getElementById('grid-select');
+        for (let i = 3; i <= 20; i++) {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = `${i} x ${i}`;
+            if(i === 5) opt.selected = true;
+            gridSelect.appendChild(opt);
+        }
+
+        let currentImgUrl = "";
+        let gridSize, useTimer, startTime, timerInterval, totalPiecesCount;
+        let isMuted = false, isPaused = false;
+        let preMuteVolume = 0.5;
+        let shouldPlayMusic = false;
+        let musicPlaylist = [];
+        let currentMusicIndex = -1;
+
+        const gridContainer = document.getElementById('puzzle-grid');
+        const pool = document.getElementById('pieces-pool');
+        const peek = document.getElementById('peek-view');
+        const music = document.getElementById('bg-music');
+        const volSlider = document.getElementById('volume-slider');
+        const muteBtn = document.getElementById('mute-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+        const musicShuffleBtn = document.getElementById('music-shuffle-btn');
+        const statsDisplay = document.getElementById('completion-stats');
+        const victoryContainer = document.getElementById('victory-container');
+        const stamp = document.getElementById('completion-stamp');
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playBeep(type) {
+            if (isMuted) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            if (type === 'correct') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else if (type === 'victory') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(261.63, now);
+                osc.frequency.linearRampToValueAtTime(1046.50, now + 0.6);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.start(now); osc.stop(now + 0.6);
+            }
+        }
+
+        music.onended = () => {
+            if (musicPlaylist.length > 1) shuffleMusic();
+            else if (musicPlaylist.length === 1) music.play();
+        };
+
+        function shuffleMusic() {
+            if (musicPlaylist.length === 0) return;
+            let nextIndex = Math.floor(Math.random() * musicPlaylist.length);
+            currentMusicIndex = nextIndex;
+            music.src = musicPlaylist[currentMusicIndex];
+            music.play();
+        }
+
+        function togglePause() {
+            if (isPaused) {
+                music.play();
+                pauseBtn.innerText = "Pause";
+            } else {
+                music.pause();
+                pauseBtn.innerText = "Resume";
+            }
+            isPaused = !isPaused;
+        }
+
+        function toggleImageInputs() {
+            const source = document.getElementById('image-source').value;
+            document.getElementById('url-input-container').style.display = (source === 'web') ? 'block' : 'none';
+            document.getElementById('file-input-container').style.display = (source === 'local') ? 'block' : 'none';
+        }
+
+        function toggleMusicInputs() {
+            const musicOn = document.getElementById('music-select').value === 'on';
+            const source = document.getElementById('music-source').value;
+            document.getElementById('music-source-container').style.display = musicOn ? 'block' : 'none';
+            document.getElementById('music-file-container').style.display = (musicOn && source === 'folder') ? 'block' : 'none';
+            document.getElementById('music-link-container').style.display = (musicOn && source === 'link') ? 'block' : 'none';
+        }
+
+        function updateVolume(val) {
+            music.volume = val;
+            if (val > 0) { isMuted = false; muteBtn.innerText = "Mute"; }
+        }
+
+        function toggleMute() {
+            if (!isMuted) {
+                preMuteVolume = music.volume;
+                music.volume = 0;
+                volSlider.value = 0;
+                muteBtn.innerText = "Unmute";
+                isMuted = true;
+            } else {
+                music.volume = preMuteVolume;
+                volSlider.value = preMuteVolume;
+                muteBtn.innerText = "Mute";
+                isMuted = false;
+            }
+        }
+
+        window.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 's') { peek.style.backgroundImage = `url(${currentImgUrl})`; peek.style.display = 'block'; } });
+        window.addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 's') peek.style.display = 'none'; });
+
+        function saveGame() {
+            const correctSlots = [];
+            document.querySelectorAll('.slot').forEach(slot => {
+                if (slot.children.length > 0 && slot.children[0].classList.contains('is-correct')) correctSlots.push(slot.dataset.pos);
+            });
+            const gameState = { gridSize, useTimer, elapsedTime: Math.floor((Date.now() - startTime) / 1000), correctSlots, musicOn: shouldPlayMusic, savedImgUrl: currentImgUrl };
+            localStorage.setItem('puzzle_save', JSON.stringify(gameState));
+            alert("Game Saved!");
+        }
+
+        function loadGame() {
+            const raw = localStorage.getItem('puzzle_save');
+            if (!raw) { alert("No saved game found."); return; }
+            let data;
+            try { data = JSON.parse(raw); } catch (e) { alert("The saved game could not be read."); return; }
+            if (!confirm("Load your saved game? Your current progress will be replaced.")) return;
+            clearInterval(timerInterval);
+            document.getElementById('timer').innerText = "00:00";
+            victoryContainer.style.display = 'none';
+            initGame(data);
+        }
+
+        function handleStart() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const imgSource = document.getElementById('image-source').value;
+            const musicOn = document.getElementById('music-select').value === 'on';
+            musicPlaylist = [];
+            if (musicOn) {
+                if (document.getElementById('music-source').value === 'folder') {
+                    const files = document.getElementById('local-music').files;
+                    for (let f of files) musicPlaylist.push(URL.createObjectURL(f));
+                    musicShuffleBtn.style.display = 'block';
+                    shuffleMusic();
+                } else {
+                    const url = document.getElementById('music-url').value.trim();
+                    if(url) { music.src = url; music.loop = true; music.play(); }
+                }
+            }
+            if (imgSource === 'web') initGame(null, document.getElementById('web-url').value.trim());
+            else {
+                const f = document.getElementById('local-file').files[0];
+                if (f) { const r = new FileReader(); r.onload = (e) => initGame(null, e.target.result); r.readAsDataURL(f); }
+            }
+        }
+
+        function initGame(savedData = null, customUrl = null) {
+            const data = savedData || { gridSize: parseInt(gridSelect.value), useTimer: document.getElementById('timer-select').value === 'on', musicOn: document.getElementById('music-select').value === 'on', elapsedTime: 0, correctSlots: [], savedImgUrl: customUrl };
+            gridSize = data.gridSize; totalPiecesCount = gridSize * gridSize; currentImgUrl = data.savedImgUrl;
+            document.getElementById('settings-overlay').style.display = 'none';
+            document.getElementById('game-container').style.display = 'flex';
+            document.getElementById('hud').style.display = 'flex';
+            if(data.useTimer) startTimer(data.elapsedTime);
+            
+            const img = new Image();
+            img.src = currentImgUrl;
+            img.onload = () => {
+                const boardWidth = Math.min(window.innerWidth * 0.55, 700);
+                gridContainer.style.width = boardWidth + 'px';
+                gridContainer.style.height = (boardWidth / (img.width/img.height)) + 'px';
+                gridContainer.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+                gridContainer.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+                
+                const pW = boardWidth / gridSize;
+                const pH = (boardWidth / (img.width/img.height)) / gridSize;
+
+                gridContainer.innerHTML = ''; pool.innerHTML = '';
+                let pieces = [];
+                for (let r = 0; r < gridSize; r++) {
+                    for (let c = 0; c < gridSize; c++) {
+                        const pos = `${r}-${c}`, slot = document.createElement('div');
+                        slot.className = 'slot'; slot.style.width = pW + 'px'; slot.style.height = pH + 'px'; slot.dataset.pos = pos; slot.ondragover = allowDrop; slot.ondrop = dropToSlot; gridContainer.appendChild(slot);
+                        const piece = document.createElement('div');
+                        piece.className = 'piece'; piece.id = `p${r}-${c}`; piece.style.width = pW + 'px'; piece.style.height = pH + 'px'; piece.style.backgroundImage = `url(${currentImgUrl})`; piece.style.backgroundSize = `${boardWidth}px ${(boardWidth / (img.width/img.height))}px`; piece.style.backgroundPosition = `-${c * pW}px -${r * pH}px`; piece.dataset.correct = pos; piece.draggable = true; piece.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
+                        if (data.correctSlots.includes(pos)) { piece.classList.add('is-correct'); piece.draggable = false; slot.appendChild(piece); } else pieces.push(piece);
+                    }
+                }
+                pieces.sort(() => Math.random() - 0.5);
+                pieces.forEach(p => pool.appendChild(p));
+                updateProgress();
+            };
+        }
+
+        function shuffleRemaining() { Array.from(pool.querySelectorAll('.piece')).sort(() => Math.random() - 0.5).forEach(p => pool.appendChild(p)); }
+        function startTimer(offset) { startTime = Date.now() - (offset * 1000); timerInterval = setInterval(() => { const elapsed = Math.floor((Date.now() - startTime) / 1000); document.getElementById('timer').innerText = `${Math.floor(elapsed/60).toString().padStart(2,'0')}:${(elapsed%60).toString().padStart(2,'0')}`; }, 1000); }
+        function allowDrop(e) { e.preventDefault(); }
+        function dropToSlot(e) { e.preventDefault(); const id = e.dataTransfer.getData("text"); const piece = document.getElementById(id); let target = e.target; if (target.classList.contains('piece')) target = target.parentElement; if (target.classList.contains('slot') && target.children.length === 0) { target.appendChild(piece); if (piece.dataset.correct === target.dataset.pos) { piece.classList.add('is-correct'); piece.draggable = false; playBeep('correct'); } updateProgress(); } }
+        function dropToPool(e) { e.preventDefault(); const id = e.dataTransfer.getData("text"); const piece = document.getElementById(id); if (piece && !piece.classList.contains('is-correct')) { pool.appendChild(piece); updateProgress(); } }
+        function updateProgress() { const c = document.querySelectorAll('.is-correct').length; statsDisplay.innerText = `Completed ${Math.floor((c / totalPiecesCount) * 100)} %`; if (c === totalPiecesCount) { clearInterval(timerInterval); victoryContainer.style.display = 'flex'; music.pause(); playBeep('victory'); localStorage.removeItem('puzzle_save'); } }
+    </script>
+</body>
+</html>
